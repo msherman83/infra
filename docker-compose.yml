@@ -1,0 +1,220 @@
+version: "3"
+
+networks:
+  traefik_proxy:
+    external:
+      name: traefik_proxy
+  default:
+    driver: bridge
+
+services:
+
+  traefik:
+    hostname: traefik
+    image: traefik:v1.7.16
+    container_name: traefik
+    env_file:
+      - ./traefik.env
+    restart: unless-stopped
+    networks:
+      - default
+      - traefik_proxy
+    ports:
+      - "80:80"
+      - "443:443"
+    domainname: ${DOMAINNAME}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.backend=traefik"
+      - "traefik.frontend.rule=Host:traefik.${DOMAINNAME}"  
+#      - "traefik.frontend.rule=Host:${DOMAINNAME}; PathPrefixStrip: /traefik"
+      - "traefik.port=8080"
+      - "traefik.docker.network=traefik_proxy"
+      - "traefik.frontend.headers.SSLRedirect=true"
+      - "traefik.frontend.headers.STSSeconds=315360000"
+      - "traefik.frontend.headers.browserXSSFilter=true"
+      - "traefik.frontend.headers.contentTypeNosniff=true"
+      - "traefik.frontend.headers.forceSTSHeader=true"
+      - "traefik.frontend.headers.SSLHost=traefik.sherma.net"
+      - "traefik.frontend.headers.STSIncludeSubdomains=true"
+      - "traefik.frontend.headers.STSPreload=true"
+#      - "traefik.frontend.headers.frameDeny: true" #customFrameOptionsValue overrides this
+      - "traefik.frontend.headers.customFrameOptionsValue: allow-from https:${DOMAINNAME}"
+      - "traefik.frontend.auth.basic.users=msherman:$$apr1$$2WEOduRE$$afn0v16BYeZbYjJw02x9c1"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ${USERDIR}/docker/traefik:/etc/traefik
+      - ${USERDIR}/docker/traefik/acme/acme.json:/acme.json
+      - ${USERDIR}/docker/shared:/shared
+
+  db_recipes:
+    image: postgres:11-alpine
+    container_name: db_recipes
+    env_file:
+      - ${USERDIR}/docker/recipes/recipes.env
+    restart: unless-stopped
+    volumes:
+      - ${USERDIR}/docker/recipes/postgresql/data:/var/lib/postgresql/data
+    networks:
+      - default
+
+  recipes:
+    image: vabene1111/recipes
+    container_name: recipes
+    env_file:
+      - ${USERDIR}/docker/recipes/recipes.env
+    depends_on: 
+      - db_recipes
+    volumes:
+      - ${USERDIR}/docker/recipes/staticfiles:/opt/recipes/staticfiles
+      - ${USERDIR}/docker/recipes/mediafiles:/opt/recipes/mediafiles
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.backend=recipes"
+      - "traefik.frontend.rule=Host:recipes.${DOMAINNAME}"
+      - "traefik.docker.network=traefik_proxy"
+    networks:
+      - default
+      - traefik_proxy
+
+
+  # nginx_recipes:
+  #   image: nginx:mainline-alpine
+  #   restart: unless-stopped
+  #   env_file:
+  #     - ${USERDIR}/docker/recipes/recipes.env
+  #   volumes:
+  #     - ${USERDIR}/docker/recipes/nginx/conf.d/Recipes.conf:/etc/nginx/conf.d/default.conf
+  #     - ${USERDIR}/docker/recipes/mediafiles:/media
+  #   labels:
+      # - "traefik.enable=true"
+      # - "traefik.backend=recipes"
+      # - "traefik.frontend.rule=Host:recipes.${DOMAINNAME}"  
+#      - "traefik.frontend.rule=Host:${DOMAINNAME}; PathPrefixStrip: /traefik"
+      # - "traefik.port=9090"
+      # - "traefik.docker.network=traefik_proxy"
+      # - "traefik.frontend.headers.SSLRedirect=true"
+      # - "traefik.frontend.headers.STSSeconds=315360000"
+      # - "traefik.frontend.headers.browserXSSFilter=true"
+      # - "traefik.frontend.headers.contentTypeNosniff=true"
+      # - "traefik.frontend.headers.forceSTSHeader=true"
+      # - "traefik.frontend.headers.SSLHost=recipes.sherma.net"
+      # - "traefik.frontend.headers.STSPreload=true"
+#      - "traefik.frontend.headers.frameDeny: true" #customFrameOptionsValue overrides this
+      # - "traefik.frontend.headers.customFrameOptionsValue: allow-from https:${DOMAINNAME}"
+    # networks:
+    #   - default
+    #   - traefik_proxy
+
+  airsonic:
+    image: linuxserver/airsonic
+    container_name: airsonic
+    env_file:
+      - ./traefik.env
+    volumes:
+      - ${USERDIR}/docker/airsonic/config:/config
+      - /mnt/movies3/media3/Music:/music
+      - /mnt/movies3/media3/airsonic/playlists:/playlists
+      - /mnt/movies3/media3/airsonic/podcasts:/podcasts
+      - /mnt/movies3/media3/airsonic/media:/media #optional
+    restart: unless-stopped
+    networks:
+      - traefik_proxy
+      - default
+    labels:
+      - "traefik.enable=true"
+      - "traefik.backend=airsonic"
+      - "traefik.frontend.rule=Host:airsonic.${DOMAINNAME}"  
+#      - "traefik.frontend.rule=Host:${DOMAINNAME}; PathPrefixStrip: /traefik"
+      - "traefik.port=4040"
+      - "traefik.docker.network=traefik_proxy"
+      - "traefik.frontend.headers.SSLRedirect=true"
+      - "traefik.frontend.headers.STSSeconds=315360000"
+      - "traefik.frontend.headers.browserXSSFilter=true"
+      - "traefik.frontend.headers.contentTypeNosniff=true"
+      - "traefik.frontend.headers.forceSTSHeader=true"
+      - "traefik.frontend.headers.SSLHost=airsonic.sherma.net"
+      - "traefik.frontend.headers.SSLForceHost=true"
+      - "traefik.frontend.headers.STSIncludeSubdomains=true"
+      - "traefik.frontend.headers.STSPreload=true"
+#      - "traefik.frontend.headers.frameDeny: true" #customFrameOptionsValue overrides this
+      # - "traefik.frontend.headers.customFrameOptionsValue: allow-from https:${DOMAINNAME}"  x x
+
+  db:
+    image: postgres:11-alpine
+    env_file:
+      - ./traefik.env
+    logging:
+      driver: "none"
+    restart: unless-stopped
+    volumes:
+      - ${USERDIR}/docker/postgresql/data:/var/lib/postgresql/data
+    networks:
+      - default
+
+  wiki:
+    image: requarks/wiki:2
+    env_file:
+      - ./traefik.env
+    depends_on:
+      - db
+    restart: unless-stopped
+  # ports:
+  #   - "80:3000"
+    networks:
+      - traefik_proxy
+      - default
+    volumes:
+      - ${USERDIR}/docker/wikijs/data:/data
+    labels:
+      - "traefik.enable=true"
+      - "traefik.backend=wiki"
+      - "traefik.frontend.rule=Host:wiki.${DOMAINNAME}"  
+#      - "traefik.frontend.rule=Host:${DOMAINNAME}; PathPrefixStrip: /traefik"
+      - "traefik.port=3000"
+      - "traefik.docker.network=traefik_proxy"
+      - "traefik.frontend.headers.SSLRedirect=true"
+      - "traefik.frontend.headers.STSSeconds=315360000"
+      - "traefik.frontend.headers.browserXSSFilter=true"
+      - "traefik.frontend.headers.contentTypeNosniff=true"
+      - "traefik.frontend.headers.forceSTSHeader=true"
+      - "traefik.frontend.headers.SSLHost=wiki.sherma.net"
+      - "traefik.frontend.headers.STSIncludeSubdomains=true"
+      - "traefik.frontend.headers.STSPreload=true"
+#      - "traefik.frontend.headers.frameDeny: true" #customFrameOptionsValue overrides this
+      - "traefik.frontend.headers.customFrameOptionsValue: allow-from https:${DOMAINNAME}"
+
+  portainer:
+    image: portainer/portainer
+    container_name: portainer
+    env_file:
+      - ./traefik.env
+    restart: always
+    command: -H unix:///var/run/docker.sock
+#    ports:
+#      - "9000:9000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${USERDIR}/docker/portainer/data:/data
+      - ${USERDIR}/docker/shared:/shared
+    networks:
+      - traefik_proxy
+      - default
+    labels:
+      - "traefik.enable=true"
+      - "traefik.backend=portainer"
+      - "traefik.frontend.rule=Host:portainer.${DOMAINNAME}"  
+#      - "traefik.frontend.rule=Host:${DOMAINNAME}; PathPrefixStrip: /traefik"
+      - "traefik.port=9000"
+      - "traefik.docker.network=traefik_proxy"
+      - "traefik.frontend.headers.SSLRedirect=true"
+      - "traefik.frontend.headers.STSSeconds=315360000"
+      - "traefik.frontend.headers.browserXSSFilter=true"
+      - "traefik.frontend.headers.contentTypeNosniff=true"
+      - "traefik.frontend.headers.forceSTSHeader=true"
+      - "traefik.frontend.headers.SSLHost=portainer.sherma.net"
+      - "traefik.frontend.headers.STSIncludeSubdomains=true"
+      - "traefik.frontend.headers.STSPreload=true"
+#      - "traefik.frontend.headers.frameDeny: true" #customFrameOptionsValue overrides this
+      - "traefik.frontend.headers.customFrameOptionsValue: allow-from https:${DOMAINNAME}"

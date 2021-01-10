@@ -1,0 +1,6 @@
+*.env
+*.conf
+*data*
+*code-workspace
+*BACKUP*
+**/data
