@@ -87,7 +87,7 @@ services:
       - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
       # HTTP Routers
       - "traefik.http.routers.traefik-rtr.entrypoints=https"
-      - "traefik.http.routers.traefik-rtr.rule=Host(`traefik.$DOMAINNAME`)"
+      - "traefik.http.routers.traefik-rtr.rule=HostHeader(`traefik.$DOMAINNAME`)"
       - "traefik.http.routers.traefik-rtr.tls=true"
 #      - "traefik.http.routers.traefik-rtr.tls.certresolver=dns-cloudflare" # Comment out this line after first run of traefik to force the use of wildcard certs
       - "traefik.http.routers.traefik-rtr.tls.domains[0].main=$DOMAINNAME"
@@ -122,7 +122,7 @@ services:
       - "traefik.enable=true"
       ## HTTP Routers
       - "traefik.http.routers.portainer-rtr.entrypoints=https"
-      - "traefik.http.routers.portainer-rtr.rule=Host(`portainer.$DOMAINNAME`)"
+      - "traefik.http.routers.portainer-rtr.rule=HostHeader(`portainer.$DOMAINNAME`)"
       - "traefik.http.routers.portainer-rtr.tls=true"
       ## Middlewares
       - "traefik.http.routers.portainer-rtr.middlewares=chain-no-auth@file" # No Authentication
@@ -130,3 +130,77 @@ services:
       ## HTTP Services
       - "traefik.http.routers.portainer-rtr.service=portainer-svc"
       - "traefik.http.services.portainer-svc.loadbalancer.server.port=9000"
+
+  shaarli:
+    container_name: shaarli
+    image: shaarli/shaarli:latest
+    restart: unless-stopped
+    networks:
+      - traefik2_proxy
+      - default
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      - PUID=$PUID
+      - PGID=$PGID
+      - TZ=$TZ
+    volumes:
+      - $DOCKERDIR/shaarli/shaarli-cache:/var/www/shaarli/cache
+      - $DOCKERDIR/shaarli/shaarli-data:/var/www/shaarli/data
+    labels:
+      - "traefik.enable=true"
+      ## HTTP Routers
+      - "traefik.http.routers.shaarli-rtr.entrypoints=https"
+      - "traefik.http.routers.shaarli-rtr.rule=HostHeader(`shaarli.$DOMAINNAME`)"
+      - "traefik.http.routers.shaarli-rtr.tls=true"
+      ## Middlewares
+      - "traefik.http.routers.shaarli-rtr.middlewares=chain-no-auth@file" # No Authentication
+#      - "traefik.http.routers.portainer-rtr.middlewares=chain-basic-auth@file" # Basic Authentication
+      ## HTTP Services
+      - "traefik.http.routers.shaarli-rtr.service=shaarli-svc"
+      - "traefik.http.services.shaarli-svc.loadbalancer.server.port=9090"
+
+  db:
+    image: postgres:11-alpine
+    env_file:
+      - ./traefik2.env
+    logging:
+      driver: "none"
+    restart: unless-stopped
+    volumes:
+      - ${USERDIR}/docker/postgresql/data:/var/lib/postgresql/data
+    networks:
+      - default
+
+  airsonic:
+    image: linuxserver/airsonic
+    container_name: airsonic
+    env_file:
+      - ./traefik2.env
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      - PUID=$PUID
+      - PGID=$PGID
+      - JAVA_OPTS=-Dserver.use-forward-headers=true
+    volumes:
+      - ${USERDIR}/docker/airsonic/config:/config
+      - /mnt/movies3/media3/Music:/music
+      - /mnt/movies3/media3/airsonic/playlists:/playlists
+      - /mnt/movies3/media3/airsonic/podcasts:/podcasts
+      - /mnt/movies3/media3/airsonic/media:/media #optional
+    restart: unless-stopped
+    networks:
+      - traefik2_proxy
+    labels:
+      - "traefik.enable=true"
+      ## HTTP Routers
+      - "traefik.http.routers.airsonic-rtr.entrypoints=https"
+      - "traefik.http.routers.airsonic-rtr.rule=HostHeader(`airsonic.$DOMAINNAME`)"
+      - "traefik.http.routers.airsonic-rtr.tls=true"
+      ## Middlewares
+      - "traefik.http.routers.airsonic-rtr.middlewares=chain-no-auth@file" # No Authentication
+#      - "traefik.http.routers.portainer-rtr.middlewares=chain-basic-auth@file" # Basic Authentication
+      ## HTTP Services
+      - "traefik.http.routers.airsonic-rtr.service=airsonic-svc"
+      - "traefik.http.services.airsonic-svc.loadbalancer.server.port=3000"

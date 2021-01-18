@@ -40,7 +40,7 @@ services:
       - "traefik.frontend.headers.STSPreload=true"
 #      - "traefik.frontend.headers.frameDeny: true" #customFrameOptionsValue overrides this
       - "traefik.frontend.headers.customFrameOptionsValue: allow-from https:${DOMAINNAME}"
-      - "traefik.frontend.auth.basic.users=msherman:$$apr1$$2WEOduRE$$afn0v16BYeZbYjJw02x9c1"
+      - "traefik.frontend.auth.basic.users=${TRAEFIK_LOGIN}"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ${USERDIR}/docker/traefik:/etc/traefik
