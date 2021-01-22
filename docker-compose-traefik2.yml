@@ -17,11 +17,10 @@ services:
 # Traefik 2
   traefik:
     container_name: traefik
-    image: traefik:2.2.2 # the chevrotin tag refers to v2.2.x but introduced a breaking change in 2.2.2
+    image: traefik:2.2.1 # the chevrotin tag refers to v2.2.x but introduced a breaking change in 2.2.2
     restart: unless-stopped
     command: # CLI arguments
       - --global.checkNewVersion=true
-      - --global.sendAnonymousUsage=true
       - --entryPoints.http.address=:80
       - --entryPoints.https.address=:443
         # Allow these IPs to set the X-Forwarded-* headers - Cloudflare IPs: https://www.cloudflare.com/ips/
@@ -49,6 +48,8 @@ services:
       - --certificatesResolvers.dns-cloudflare.acme.email=$CLOUDFLARE_EMAIL
       - --certificatesResolvers.dns-cloudflare.acme.storage=/acme.json
       - --certificatesResolvers.dns-cloudflare.acme.dnsChallenge.provider=cloudflare
+      # - --certificatesResolvers.dns-cloudflare.acme.dnsChallenge.resolvers=1.1.1.1:53,1.0.0.1:53
+      # - --certificatesResolvers.dns-cloudflare.acme.dnsChallenge.delayBeforeCheck=90
     # networks:
     #   traefik2_proxy:
     #     ipv4_address: 192.168.0.250 # You can specify a static IP
@@ -70,11 +71,11 @@ services:
         protocol: tcp
         mode: host
     volumes:
-      - $DOCKERDIR/traefik_2/rules:/rules 
+      - ${USERDIR}/docker/traefik_2/rules:/rules 
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - $DOCKERDIR/traefik_2/acme/acme.json:/acme.json 
-      - $DOCKERDIR/traefik_2/traefik.log:/traefik.log 
-      - $DOCKERDIR/shared:/shared
+      - ${USERDIR}/docker/traefik_2/acme/acme.json:/acme.json 
+      - ${USERDIR}/docker/traefik_2/traefik.log:/traefik.log 
+      - ${USERDIR}/docker/shared:/shared
     environment:
       - CF_API_EMAIL=$CLOUDFLARE_EMAIL
       - CF_API_KEY=$CLOUDFLARE_API_KEY
@@ -87,7 +88,7 @@ services:
       - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
       # HTTP Routers
       - "traefik.http.routers.traefik-rtr.entrypoints=https"
-      - "traefik.http.routers.traefik-rtr.rule=HostHeader(`traefik.$DOMAINNAME`)"
+      - "traefik.http.routers.traefik-rtr.rule=Host(`traefik.$DOMAINNAME`)"
       - "traefik.http.routers.traefik-rtr.tls=true"
 #      - "traefik.http.routers.traefik-rtr.tls.certresolver=dns-cloudflare" # Comment out this line after first run of traefik to force the use of wildcard certs
       - "traefik.http.routers.traefik-rtr.tls.domains[0].main=$DOMAINNAME"
@@ -112,8 +113,8 @@ services:
 #      - "$PORTAINER_PORT:9000"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - $DOCKERDIR/portainer/data:/data
-      - $DOCKERDIR/shared:/shared
+      - ${USERDIR}/docker/portainer/data:/data
+      - ${USERDIR}/docker/shared:/shared
     environment:
       - PUID=$PUID
       - PGID=$PGID
@@ -122,7 +123,7 @@ services:
       - "traefik.enable=true"
       ## HTTP Routers
       - "traefik.http.routers.portainer-rtr.entrypoints=https"
-      - "traefik.http.routers.portainer-rtr.rule=HostHeader(`portainer.$DOMAINNAME`)"
+      - "traefik.http.routers.portainer-rtr.rule=Host(`portainer.$DOMAINNAME`)"
       - "traefik.http.routers.portainer-rtr.tls=true"
       ## Middlewares
       - "traefik.http.routers.portainer-rtr.middlewares=chain-no-auth@file" # No Authentication
@@ -130,35 +131,6 @@ services:
       ## HTTP Services
       - "traefik.http.routers.portainer-rtr.service=portainer-svc"
       - "traefik.http.services.portainer-svc.loadbalancer.server.port=9000"
-
-  shaarli:
-    container_name: shaarli
-    image: shaarli/shaarli:latest
-    restart: unless-stopped
-    networks:
-      - traefik2_proxy
-      - default
-    security_opt:
-      - no-new-privileges:true
-    environment:
-      - PUID=$PUID
-      - PGID=$PGID
-      - TZ=$TZ
-    volumes:
-      - $DOCKERDIR/shaarli/shaarli-cache:/var/www/shaarli/cache
-      - $DOCKERDIR/shaarli/shaarli-data:/var/www/shaarli/data
-    labels:
-      - "traefik.enable=true"
-      ## HTTP Routers
-      - "traefik.http.routers.shaarli-rtr.entrypoints=https"
-      - "traefik.http.routers.shaarli-rtr.rule=HostHeader(`shaarli.$DOMAINNAME`)"
-      - "traefik.http.routers.shaarli-rtr.tls=true"
-      ## Middlewares
-      - "traefik.http.routers.shaarli-rtr.middlewares=chain-no-auth@file" # No Authentication
-#      - "traefik.http.routers.portainer-rtr.middlewares=chain-basic-auth@file" # Basic Authentication
-      ## HTTP Services
-      - "traefik.http.routers.shaarli-rtr.service=shaarli-svc"
-      - "traefik.http.services.shaarli-svc.loadbalancer.server.port=9090"
 
   db:
     image: postgres:11-alpine
@@ -192,15 +164,217 @@ services:
     restart: unless-stopped
     networks:
       - traefik2_proxy
+      - default
     labels:
       - "traefik.enable=true"
       ## HTTP Routers
       - "traefik.http.routers.airsonic-rtr.entrypoints=https"
-      - "traefik.http.routers.airsonic-rtr.rule=HostHeader(`airsonic.$DOMAINNAME`)"
+      - "traefik.http.routers.airsonic-rtr.rule=Host(`airsonic.$DOMAINNAME`)"
       - "traefik.http.routers.airsonic-rtr.tls=true"
       ## Middlewares
       - "traefik.http.routers.airsonic-rtr.middlewares=chain-no-auth@file" # No Authentication
 #      - "traefik.http.routers.portainer-rtr.middlewares=chain-basic-auth@file" # Basic Authentication
       ## HTTP Services
       - "traefik.http.routers.airsonic-rtr.service=airsonic-svc"
-      - "traefik.http.services.airsonic-svc.loadbalancer.server.port=3000"
+      - "traefik.http.services.airsonic-svc.loadbalancer.server.port=4040"
+
+  wikijs_db:
+    image: postgres:11-alpine
+    container_name: wikijs_db
+    env_file:
+      - ./traefik2.env
+    logging:
+      driver: "none"
+    restart: unless-stopped
+    volumes:
+      - ${USERDIR}/docker/postgresql/data:/var/lib/postgresql/data
+    networks:
+      - default
+
+  wikijs:
+    image: requarks/wiki:2
+    container_name: wikijs
+    env_file:
+      - ./traefik2.env
+    depends_on:
+      - wikijs_db
+    restart: unless-stopped
+  # ports:
+  #   - "80:3000"
+    networks:
+      - traefik2_proxy
+      - default
+    volumes:
+      - ${USERDIR}/docker/wikijs/data:/data
+    labels:
+      - "traefik.enable=true"
+      ## HTTP Routers
+      - "traefik.http.routers.wikijs-rtr.entrypoints=https"
+      - "traefik.http.routers.wikijs-rtr.rule=Host(`wiki.$DOMAINNAME`)"
+      - "traefik.http.routers.wikijs-rtr.tls=true"
+      ## Middlewares
+      - "traefik.http.routers.wikijs-rtr.middlewares=chain-no-auth@file" # No Authentication
+#      - "traefik.http.routers.portainer-rtr.middlewares=chain-basic-auth@file" # Basic Authentication
+      ## HTTP Services
+      - "traefik.http.routers.wikijs-rtr.service=wikijs-svc"
+      - "traefik.http.services.wikijs-svc.loadbalancer.server.port=3000"
+
+  db_recipes:
+    restart: unless-stopped
+    image: postgres:11-alpine
+    container_name: db_recipes
+    volumes:
+      - ${USERDIR}/docker/recipes/postgresql/data:/var/lib/postgresql/data
+    env_file:
+      - ${USERDIR}/docker/recipes/recipes.env
+    networks:
+      - default
+
+  web_recipes:
+    image: vabene1111/recipes
+    container_name: recipes
+    restart: unless-stopped
+    env_file:
+      - ${USERDIR}/docker/recipes/recipes.env
+    volumes:
+      - ${USERDIR}/docker/recipes/staticfiles:/opt/recipes/staticfiles
+      - ${USERDIR}/docker/recipes/mediafiles:/opt/recipes/mediafiles
+      - ${USERDIR}/docker/recipes/nginx/conf.d:/opt/recipes/nginx/conf.d
+    depends_on:
+      - db_recipes
+    networks:
+      - default
+
+  nginx_recipes:
+    image: nginx:mainline-alpine
+    restart: unless-stopped
+    container_name: nginx_recipes
+    env_file:
+      - ${USERDIR}/docker/recipes/recipes.env
+    volumes:
+      - ${USERDIR}/docker/recipes/nginx/conf.d:/etc/nginx/conf.d:ro
+      - ${USERDIR}/docker/recipes/staticfiles:/static
+      - ${USERDIR}/docker/recipes/mediafiles:/media
+    labels:
+      - "traefik.enable=true"
+      ## HTTP Routers
+      - "traefik.http.routers.recipes-rtr.entrypoints=https"
+      - "traefik.http.routers.recipes-rtr.rule=Host(`recipes.$DOMAINNAME`)"
+      - "traefik.http.routers.recipes-rtr.tls=true"
+      ## Middlewares
+      - "traefik.http.routers.recipes-rtr.middlewares=chain-no-auth@file" # No Authentication
+#      - "traefik.http.routers.portainer-rtr.middlewares=chain-basic-auth@file" # Basic Authentication
+      ## HTTP Services
+      # - "traefik.http.routers.recipes-rtr.service=nginx_recipes-svc"
+      # - "traefik.http.services.wikijs-svc.loadbalancer.server.port=3000"
+    depends_on:
+      - web_recipes
+    networks:
+      - default
+      - traefik2_proxy
+
+
+#####################################
+# NEXTCLOUD
+#####################################
+
+  # nextcloud_db:
+  #   image: mariadb
+  #   command: --transaction-isolation=READ-COMMITTED --binlog-format=ROW
+  #   container_name: nextcloud-mariadb
+  #   env_file:
+  #     - ./nc.env
+  #   volumes:
+  #     - ${USERDIR}/docker/nextcloud/mysql:/var/lib/mysql
+  #   restart: unless-stopped
+  #   networks:
+  #     - default
+
+  # nextcloud_redis:
+  #   image: redis:alpine
+  #   container_name: redis
+  #   env_file:
+  #     - ./nc.env
+  #   command: redis-server --requirepass ${REDIS_HOST_PASSWORD}
+  #   restart: unless-stopped
+  #   volumes:
+  #     - ${USERDIR}/docker/nextcloud/redis:/data
+  #   networks:
+  #     - default
+
+  # nextcloud:
+  #   image: nextcloud:20.0.5
+  #   container_name: nextcloud
+  #   env_file:
+  #     - ./nc.env
+  #   restart: unless-stopped
+  #   networks:
+  #     - traefik2_proxy
+  #     - default
+  #   security_opt:
+  #     - no-new-privileges:true
+  #   depends_on:
+  #     - nextcloud_db
+  #     - nextcloud_redis
+  #   volumes:
+  #     - ${USERDIR}/docker/nextcloud/nextcloud:/var/www/html
+  #     - ${USERDIR}/docker/nextcloud/config:/var/www/html/config
+  #     - ${USERDIR}/docker/nextcloud/custom_apps:/var/www/html/custom_apps
+  #     - ${USERDIR}/docker/nextcloud/data:/var/www/html/data
+  #     - ${USERDIR}/docker/nextcloud/themes:/var/www/html/themes
+  #   environment:
+  #     - REDIS_HOST=redis
+  #     - REDIS_HOST_PASSWORD=${REDIS_HOST_PASSWORD}
+  #   labels:
+      # - "traefik.enable=true"
+      # - "traefik.http.routers.nextcloud.middlewares=nextcloud,nextcloud_redirect"
+      # - "traefik.http.middlewares.nextcloud.headers.stsseconds=15552000"
+      # - "traefik.http.middlewares.nextcloud.headers.stsincludesubdomains=true"
+      # - "traefik.http.middlewares.nextcloud.headers.stspreload=true"
+      # - "traefik.http.middlewares.nextcloud.headers.forcestsheader=true"
+      # - "traefik.http.routers.nextcloud.rule=Host(`nextcloud.$DOMAINNAME`)" #comment out if using dyndns
+      # - "traefik.http.middlewares.nextcloud_redirect.redirectregex.regex=/.well-known/(card|cal)dav"
+      # - "traefik.http.middlewares.nextcloud_redirect.redirectregex.replacement=/remote.php/dav/"
+      # - "traefik.http.routers.nextcloud-secure.tls=true"
+      # - "traefik.http.routers.nextcloud.middlewares=chain-no-auth@file"
+
+      # - "traefik.http.middlewares.nextcloud_redirect.redirectregex.regex=/.well-known/(card|cal)dav"
+      # - "traefik.http.middlewares.nextcloud_redirect.redirectregex.replacement=/remote.php/dav/"
+
+      # - "traefik.enable=true"
+      # - "traefik.backend=nextcloud"
+      # - "traefik.frontend.rule=Host:nextcloud.${DOMAINNAME}"
+      # - "traefik.port=80"
+      # - "traefik.protocol=http"
+      # - "traefik.docker.network=traefik_proxy"
+      # - "traefik.frontend.headers.SSLRedirect=true"
+      # - "traefik.frontend.headers.STSSeconds=315360000"
+      # - "traefik.frontend.headers.browserXSSFilter=true"
+      # - "traefik.frontend.headers.contentTypeNosniff=true"
+      # - "traefik.frontend.headers.forceSTSHeader=true"
+      # - "traefik.frontend.headers.SSLHost=sherma.net"
+      # - "traefik.frontend.headers.STSIncludeSubdomains=true"
+      # - "traefik.frontend.headers.STSPreload=true"
+      # - "traefik.frontend.redirect.permanent=true"
+      # - "traefik.frontend.redirect.regex=https://(.*)/.well-known/(card|cal)dav"
+      # - "traefik.frontend.redirect.replacement=https://$$1/remote.php/dav/"
+#      - "traefik.frontend.headers.frameDeny: true" #customFrameOptionsValue overrides this
+    #   - "traefik.frontend.headers.customFrameOptionsValue: allow-from https:${DOMAINNAME}"
+
+  # cron:
+  #   image: nextcloud:20.0.5
+  #   env_file:
+  #     - ./nc.env
+  #   restart: unless-stopped
+  #   volumes:
+  #     - ${USERDIR}/docker/nextcloud/nextcloud:/var/www/html
+  #     - ${USERDIR}/docker/nextcloud/config:/var/www/html/config
+  #     - ${USERDIR}/docker/nextcloud/data:/var/www/html/data
+  #     - ${USERDIR}/docker/nextcloud/custom_apps:/var/www/html/custom_apps
+  #     - ${USERDIR}/docker/nextcloud/themes:/var/www/html/themes
+  #   entrypoint: /cron.sh
+  #   depends_on:
+  #     - nextcloud_db
+  #     - nextcloud_redis
+  #   networks:
+  #     - default
